@@ -134,7 +134,7 @@ export default function CareerQuiz() {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [serverResult, setServerResult] = useState<null | any>(null);
+  const [serverResult, setServerResult] = useState<null | typeof careers[keyof typeof careers]>(null);
 
   function pickOption(qId: number, oIdx: number) {
     setAnswers((prev) => ({ ...prev, [qId]: oIdx }));
@@ -171,7 +171,7 @@ export default function CareerQuiz() {
         <div className={`${result.bg} ${result.border} border rounded-2xl p-6 mb-8`}>
           <h3 className="font-bold text-slate-900 mb-4">Key Skills to Develop</h3>
           <div className="flex flex-wrap gap-2 justify-center">
-            {result.skills.map((s) => (
+            {result.skills.map((s: string) => (
               <span key={s} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm text-slate-700">{s}</span>
             ))}
           </div>
