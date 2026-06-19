@@ -10,26 +10,34 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [18.x]
-
     steps:
       - uses: actions/checkout@v4
-      - name: Use Node.js
+
+      - name: Use Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           cache: 'npm'
 
-      - name: Install
+      - name: Install dependencies
         run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
 
       - name: Lint
         run: npm run lint
 
       - name: Build
         run: npm run build
-
-      - name: Run Prisma generate (if present)
-        run: npm run prisma:generate || true
+        env:
+          # Stub values so Next.js doesn't crash at build time when reading env vars.
+          # Real secrets are only needed at runtime on Vercel.
+          DATABASE_URL: "postgresql://user:password@localhost:5432/db"
+          NEXTAUTH_SECRET: "ci-build-secret"
+          NEXTAUTH_URL: "http://localhost:3000"
+          GEMINI_API_KEY: "stub"
+          AWS_REGION: "us-east-1"
+          AWS_ACCESS_KEY_ID: "stub"
+          AWS_SECRET_ACCESS_KEY: "stub"
+          S3_BUCKET: "stub"
