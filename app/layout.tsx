@@ -16,6 +16,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        {/* Google AdSense verification */}
+        <meta name="google-adsense-account" content="ca-pub-3566663517868189" />
+      </head>
       <body className="font-sans">
         <Navbar />
         <main>{children}</main>
