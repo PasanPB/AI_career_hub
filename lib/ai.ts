@@ -1,63 +1,158 @@
-// AI service functions — call server-side API routes (Gemini) with client-side fallbacks
+// AI service functions — server-side API routes (Gemini 2.0 Flash)
 
-export async function analyzeCv(cvText: string) {
+// ── Session storage helpers (client-side only) ─────────────────────────────
+
+export function saveCvToSession(cvText: string, fileName?: string) {
+  if (typeof window === "undefined") return;
   try {
-    const res = await fetch("/api/analyze-cv", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cvText }),
-    });
-    if (!res.ok) throw new Error("API error");
-    return await res.json();
-  } catch (err) {
-    console.error("analyzeCv error:", err);
-    return getMockCvResult();
-  }
+    sessionStorage.setItem("cv_text", cvText);
+    if (fileName) sessionStorage.setItem("cv_filename", fileName);
+  } catch {}
 }
 
-export async function generateInterviewQuestions(role: string, level: string) {
+export function getCvFromSession(): { text: string; fileName: string } | null {
+  if (typeof window === "undefined") return null;
   try {
-    const res = await fetch("/api/interview-prep", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, level }),
-    });
-    if (!res.ok) throw new Error("API error");
-    return await res.json();
-  } catch (err) {
-    console.error("generateInterviewQuestions error:", err);
-    return getMockInterviewResult(role, level);
-  }
+    const text = sessionStorage.getItem("cv_text");
+    const fileName = sessionStorage.getItem("cv_filename") || "Your CV";
+    if (text && text.length > 100) return { text, fileName };
+  } catch {}
+  return null;
 }
 
-export async function getSalaryInsights(role: string, country: string) {
+export function clearCvFromSession() {
+  if (typeof window === "undefined") return;
   try {
-    const res = await fetch("/api/salary-guide", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, country }),
-    });
-    if (!res.ok) throw new Error("API error");
-    return await res.json();
-  } catch (err) {
-    console.error("getSalaryInsights error:", err);
-    return getMockSalaryResult(role, country);
-  }
+    sessionStorage.removeItem("cv_text");
+    sessionStorage.removeItem("cv_filename");
+  } catch {}
 }
 
-export async function generateCareerRecommendation(answers: Record<number, number>) {
-  try {
-    const res = await fetch("/api/career-quiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answers }),
-    });
-    if (!res.ok) throw new Error("API error");
-    return await res.json();
-  } catch (err) {
-    console.error("generateCareerRecommendation error:", err);
-    return { title: "Software Engineer", emoji: "💻", desc: "A technical career.", skills: ["Python", "APIs"], href: "/salary-guide" };
+// ── CV Analysis ────────────────────────────────────────────────────────────
+
+export type CvResult = {
+  score: number;
+  subScores: { structure: number; content: number; ats: number; impact: number };
+  detectedRole: string;
+  detectedLevel: string;
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  improvements: string[];
+  atsOptimization: string[];
+  missingSkills: string[];
+  topKeywords: string[];
+  recommendedRoles: Array<{ role: string; match: string; reason: string }>;
+};
+
+export async function analyzeCv(cvText: string): Promise<CvResult> {
+  const res = await fetch("/api/analyze-cv", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cvText }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`CV analysis failed: ${res.status} ${errText}`);
   }
+  return res.json();
+}
+
+// ── Interview Prep ─────────────────────────────────────────────────────────
+
+export type TechQuestion = {
+  topic: string;
+  question: string;
+  answer: string;
+  tip: string;
+  difficulty: "Easy" | "Medium" | "Hard";
+};
+export type HrQuestion = {
+  question: string;
+  answer: string;
+  starExample: string;
+};
+export type InterviewResult = {
+  technical: TechQuestion[];
+  hr: HrQuestion[];
+  interviewTips: string[];
+  topicsToRevise: Array<{ topic: string; priority: "High" | "Medium" | "Low" }>;
+};
+
+export async function generateInterviewQuestions(
+  role: string,
+  level: string,
+  companyType?: string
+): Promise<InterviewResult> {
+  const res = await fetch("/api/interview-prep", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, level, companyType }),
+  });
+  if (!res.ok) throw new Error(`Interview prep failed: ${res.status}`);
+  return res.json();
+}
+
+// ── Salary Guide ───────────────────────────────────────────────────────────
+
+export type SalaryResult = {
+  currency: string;
+  entry: { min: number; max: number };
+  mid: { min: number; max: number };
+  senior: { min: number; max: number };
+  marketOutlook: { trend: "Growing" | "Stable" | "Declining"; reason: string };
+  remoteMultiplier: number;
+  requiredSkills: string[];
+  careerTips: string[];
+  topCompanies: string[];
+  certifications: Array<{ name: string; salaryBump: string }>;
+  careerPath: Array<{ title: string; yearsExp: string; avgSalary: string }>;
+};
+
+export async function getSalaryInsights(
+  role: string,
+  country: string
+): Promise<SalaryResult> {
+  const res = await fetch("/api/salary-guide", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role, country }),
+  });
+  if (!res.ok) throw new Error(`Salary guide failed: ${res.status}`);
+  return res.json();
+}
+
+// ── Career Quiz ────────────────────────────────────────────────────────────
+
+export type CareerMatch = {
+  rank: number;
+  title: string;
+  emoji: string;
+  matchScore: number;
+  whyItFits: string;
+  gapAnalysis: string[];
+  nextSteps: string[];
+  salaryRange: string;
+  color: string;
+  href: string;
+};
+export type QuizResult = {
+  matches: CareerMatch[];
+  summary: string;
+  topStrength: string;
+};
+
+export async function generateCareerRecommendation(
+  answers: Record<number, number>,
+  cvText?: string
+): Promise<QuizResult> {
+  const res = await fetch("/api/career-quiz", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ answers, cvText }),
+  });
+  if (!res.ok) throw new Error(`Career quiz failed: ${res.status}`);
+  return res.json();
 }
 
 export async function generateBlog(topic: string) {
@@ -73,96 +168,4 @@ export async function generateBlog(topic: string) {
     console.error("generateBlog error:", err);
     return null;
   }
-}
-
-// --- Mock fallbacks ---
-function getMockCvResult() {
-  return {
-    score: 72,
-    strengths: [
-      "Clear, chronological work history",
-      "Relevant technical skills prominently listed",
-      "Education section well-structured",
-    ],
-    weaknesses: [
-      "No quantifiable achievements (e.g., % improvements, revenue impact)",
-      "Summary section is generic — lacks a unique value proposition",
-      "No links to portfolio, GitHub, or LinkedIn",
-    ],
-    improvements: [
-      "Add metrics: 'Improved API response time by 40%' instead of 'Improved performance'",
-      "Include a 2–3 sentence professional summary tailored to your target role",
-      "Add your GitHub or portfolio URL near your contact info",
-    ],
-    atsOptimization: [
-      "Include keywords from job descriptions (e.g., 'REST APIs', 'Agile', 'SQL')",
-      "Avoid tables or columns — ATS systems often can't parse them",
-      "Use standard section headings: Experience, Education, Skills",
-    ],
-    missingSkills: ["Docker / Kubernetes", "Cloud platform (AWS/GCP/Azure)", "System design knowledge"],
-  };
-}
-
-function getMockInterviewResult(role: string, level: string) {
-  return {
-    technical: [
-      {
-        question: `What is the core difference between supervised and unsupervised learning?`,
-        answer: `Supervised learning trains on labeled data to predict outputs; unsupervised learning finds hidden patterns in unlabeled data. For a ${level} ${role}, you should give examples from real projects.`,
-        difficulty: "Medium",
-      },
-      {
-        question: "Explain how you would handle missing data in a dataset.",
-        answer: "Options include imputation (mean, median, mode, or model-based), deletion, or flagging missing values as a separate category. The right approach depends on the data's distribution and how much is missing.",
-        difficulty: "Easy",
-      },
-      {
-        question: "What is overfitting and how do you prevent it?",
-        answer: "Overfitting is when a model learns noise in training data and fails to generalize. Prevention: cross-validation, regularization (L1/L2), dropout (neural nets), pruning, or collecting more data.",
-        difficulty: "Hard",
-      },
-    ],
-    hr: [
-      {
-        question: "Tell me about a time you dealt with a difficult team member.",
-        answer: "Use the STAR method: describe the Situation, Task, Action you took, and Result. Focus on communication and constructive resolution.",
-      },
-      {
-        question: "Where do you see yourself in 5 years?",
-        answer: "Show ambition aligned with the company's growth. Mention specific skills you plan to develop and how they map to impact in the role.",
-      },
-      {
-        question: "Why are you leaving your current job?",
-        answer: "Keep it positive. Focus on seeking new challenges, growth opportunities, or a better cultural fit — avoid criticizing your current employer.",
-      },
-    ],
-  };
-}
-
-function getMockSalaryResult(role: string, country: string) {
-  const lkData = {
-    currency: "LKR",
-    entry: { min: 60000, max: 100000 },
-    mid: { min: 120000, max: 220000 },
-    senior: { min: 250000, max: 500000 },
-    requiredSkills: ["Python / R", "SQL", "Data visualization", "Statistics", "Machine Learning basics"],
-    careerTips: [
-      "Get certified: Google Data Analytics or IBM Data Science certificates significantly boost early salaries",
-      "Build a portfolio on Kaggle or GitHub with 3–5 real projects",
-      "Remote roles from US/EU companies pay 3–5× local market rates",
-    ],
-  };
-  const globalData = {
-    currency: "USD",
-    entry: { min: 65000, max: 90000 },
-    mid: { min: 95000, max: 140000 },
-    senior: { min: 145000, max: 220000 },
-    requiredSkills: ["Python", "SQL", "Machine Learning", "Cloud (AWS/GCP)", "Communication"],
-    careerTips: [
-      "Specialize in a domain (finance, healthcare, e-commerce) to command premium rates",
-      "Senior roles increasingly require leadership and cross-functional communication",
-      "US salaries are highest but competition is intense — strong portfolio is essential",
-    ],
-  };
-  return country.toLowerCase().includes("sri lanka") || country.toLowerCase() === "lk" ? lkData : globalData;
 }
